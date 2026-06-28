@@ -1,0 +1,15 @@
+name: enso-paper
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - xarray
+  - scipy
+  - scikit-learn
+  - matplotlib
+  - cartopy
+  - plotly
+  - netcdf4
+  - jupyter

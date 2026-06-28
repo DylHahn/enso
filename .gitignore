@@ -1,0 +1,19 @@
+# Large raw ocean data
+*.nc
+*.nc4
+*.cdf
+*.grib
+*.grb
+
+# Large/generated outputs
+stats/
+figures/
+
+# Python / notebook junk
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# System files
+.DS_Store
+Thumbs.db
