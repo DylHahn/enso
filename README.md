@@ -26,7 +26,6 @@ enso/
 * `west_east_event.py`: Event-based western-to-eastern Pacific precursor analysis.
 * `enso_bootstrap.py`: Bootstrap uncertainty analysis.
 * `enso_jackknife.py`: Jackknife sensitivity analysis.
-* `correlation.ipynb`: Exploratory notebook used during analysis development.
 * `environment.yml`: Conda environment file for reproducing the analysis.
 
 ## Data files
