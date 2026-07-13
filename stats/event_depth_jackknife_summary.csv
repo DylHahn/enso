@@ -1,0 +1,6 @@
+case,removed_event,events_used,selected_depth_m,selected_mean_abs_z,selected_mean_lead_months,selected_n_events
+all_events,none,"1983,1992,1998,2016",55,3.9317,2.25,4
+leave_one_event_out,1983,"1992,1998,2016",55,3.8531,2.3333,3
+leave_one_event_out,1992,"1983,1998,2016",55,4.2538,2.3333,3
+leave_one_event_out,1998,"1983,1992,2016",55,3.9174,3.0,3
+leave_one_event_out,2016,"1983,1992,1998",55,3.7024,1.3333,3
