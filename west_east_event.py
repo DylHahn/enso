@@ -1,3 +1,16 @@
+"""
+Event-based western Pacific precursor analysis for selected El Nino events.
+
+This module compares standardized western Pacific subsurface temperature
+anomalies with eastern Pacific surface anomalies during selected major events.
+It generates the event-map figure, lead/amplitude diagnostics, and the depth
+summary table used in the manuscript.
+
+Expected inputs
+---------------
+- data/godasClimatologyData_<depth>m.nc
+"""
+
 from pathlib import Path
 import numpy as np
 import xarray as xr
@@ -5,9 +18,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 
-# ============================================================
 # Global paper-style formatting
-# ============================================================
 mpl.rcParams.update({
     "font.family": "Arial",
     "font.weight": "bold",
@@ -51,6 +62,7 @@ OUT_NAME = "fig_3.png"
 
 
 def load_da(depth_m):
+    """Load one GODAS depth file into memory and close the dataset handle."""
     ds = xr.open_dataset(DATA_DIR / f"godasClimatologyData_{depth_m}m.nc")
     try:
         da = ds["deepTemp"].load()
@@ -60,6 +72,7 @@ def load_da(depth_m):
 
 
 def lat_weights(lat):
+    """Return cosine-latitude weights for area averaging."""
     return xr.DataArray(
         np.cos(np.deg2rad(lat.values)),
         coords={"lat": lat},
@@ -68,6 +81,7 @@ def lat_weights(lat):
 
 
 def box_anom_series(depth, lat0, lon0, half_lat, half_lon):
+    """Return a latitude-weighted box-mean monthly anomaly series."""
     da = load_da(depth)
 
     sub = da.sel(
@@ -83,10 +97,12 @@ def box_anom_series(depth, lat0, lon0, half_lat, half_lon):
 
 
 def zscore(da):
+    """Standardize a time series over its time dimension."""
     return (da - da.mean("time")) / da.std("time")
 
 
 def find_east_peak_in_year_season(vals, times, year_str, peak_months, mode="max"):
+    """Find the eastern Pacific event-season peak index and value."""
     year = int(year_str)
 
     start = pd.to_datetime(f"{year - 1}-11-01")
@@ -114,6 +130,7 @@ def find_east_peak_in_year_season(vals, times, year_str, peak_months, mode="max"
 
 
 def find_west_min_around_east(W, time, i_east_idx, months_before=18, months_after=0):
+    """Find the most negative western Pacific precursor within a lead window."""
     t_e = pd.to_datetime(time[i_east_idx])
 
     start = t_e - pd.DateOffset(months=months_before)
@@ -137,6 +154,7 @@ def make_multi_panel_og_logic(
     lead_max_months=LEAD_MAX_MONTHS,
     out_name=OUT_NAME,
 ):
+    """Generate event panels and return the matched precursor records."""
     east_z = zscore(box_anom_series(**east_cfg))
 
     fig, axs = plt.subplots(
@@ -149,8 +167,7 @@ def make_multi_panel_og_logic(
     if len(west_depths) == 1:
         axs = [axs]
 
-    fig.suptitle(
-        "Western Pacific subsurface anomalies and Niño 3.4 surface response",
+    fig.suptitle("Western Pacific subsurface temperature precursors and Niño 3.4 surface response",
         fontsize=22,
         fontweight="bold",
         y=0.965,
@@ -281,13 +298,13 @@ def make_multi_panel_og_logic(
             )
 
         ax.set_title(
-            f"Western Pacific {west_depth} m vs. Niño 3.4 surface",
+            f"Western Pacific {west_depth} m anomaly and Niño 3.4 surface anomaly",
             fontsize=15,
             fontweight="bold",
             pad=6,
         )
 
-        ax.set_ylabel("Standardized anomaly (z)", fontsize=13)
+        ax.set_ylabel("Temperature anomaly", fontsize=13)
         ax.grid(alpha=0.25, linestyle=":")
 
         ax.tick_params(axis="both", labelsize=12, width=1.1, length=5)
@@ -328,6 +345,7 @@ def make_multi_panel_og_logic(
 
 
 def plot_lead_time_by_depth(all_matches, event_years):
+    """Plot precursor lead time and amplitude as functions of depth."""
     df = pd.DataFrame(all_matches)
 
     fig, axes = plt.subplots(1, 2, figsize=(15, 6))
@@ -432,6 +450,7 @@ def plot_lead_time_by_depth(all_matches, event_years):
 
 
 def make_summary_table(all_matches):
+    """Print and return the event-depth summary table."""
     df = pd.DataFrame(all_matches)
 
     lead_mean = (

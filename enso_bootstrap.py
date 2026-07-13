@@ -1,23 +1,20 @@
 """
-Block-bootstrap uncertainty estimates for the Table 2 baseline comparison.
+Estimate block-bootstrap uncertainty for baseline ENSO comparisons.
 
-Run from the same folder that contains:
-  - enso.py
-  - data/godasClimatologyData_*.nc
-  - data/movingAverageAnomalies5m.txt
+The bootstrap resamples contiguous validation-month blocks to approximate
+serial dependence in monthly ENSO anomalies. Outputs are written to the
+``stats/`` directory.
 
-Example:
-  python enso_table2_block_bootstrap.py
+Example
+-------
+python enso_bootstrap.py
 
-Outputs:
-  stats/table2_bootstrap_long.csv
-  stats/table2_bootstrap_wide.csv
-
-Purpose:
-  Adds uncertainty intervals for correlation and RMSE while accounting
-  approximately for serial dependence in monthly ENSO anomalies by
-  resampling contiguous blocks of months.
+Outputs
+-------
+- stats/bootstrap_long.csv
+- stats/bootstrap_wide.csv
 """
+
 
 import os
 import numpy as np
@@ -28,6 +25,7 @@ from enso import EnsoLinearModel
 
 
 def safe_corr(y_true, y_pred):
+    """Return a finite-sample Pearson correlation with safeguards for invalid inputs."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     valid = np.isfinite(y_true) & np.isfinite(y_pred)
@@ -41,6 +39,7 @@ def safe_corr(y_true, y_pred):
 
 
 def rmse(y_true, y_pred):
+    """Return the root-mean-square error after removing invalid pairs."""
     y_true = np.asarray(y_true, dtype=float)
     y_pred = np.asarray(y_pred, dtype=float)
     valid = np.isfinite(y_true) & np.isfinite(y_pred)
@@ -172,14 +171,15 @@ def build_validation_predictions(
     }
 
 
-def run_table2_bootstrap(
+def run_bootstrap(
     lead_times=(1, 3, 6, 9),
     block_len=12,
     n_boot=2000,
     ci=95,
     random_seed=42,
-    out_prefix="stats/table2_bootstrap",
+    out_prefix="stats/bootstrap",
 ):
+    """Run the block-bootstrap workflow and save long and wide CSV summaries."""
     os.makedirs("stats", exist_ok=True)
     obj = EnsoLinearModel()
     records = []
@@ -258,7 +258,7 @@ def run_table2_bootstrap(
     wide_path = f"{out_prefix}_wide.csv"
     wide_df.to_csv(wide_path, index=False)
 
-    print("\nBlock-bootstrap Table 2 uncertainty estimates")
+    print("\nBlock-bootstrap uncertainty estimates")
     print("------------------------------------------------")
     print(wide_df.to_string(index=False))
     print(f"\nSaved: {long_path}")
@@ -268,7 +268,7 @@ def run_table2_bootstrap(
 
 
 if __name__ == "__main__":
-    run_table2_bootstrap(
+    run_bootstrap(
         lead_times=(1, 3, 6, 9),
         block_len=12,
         n_boot=2000,

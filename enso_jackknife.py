@@ -1,22 +1,21 @@
 """
-Jackknife sensitivity test for event-based depth selection.
+Run jackknife sensitivity tests for event-based depth selection.
 
-Run from the same folder that contains:
-  - west_east_event.py
-  - data/godasClimatologyData_*.nc
+This script recomputes western/eastern event matches while leaving out one
+El Nino event at a time. It is intended to test whether the selected western
+Pacific precursor depth is stable across individual events.
 
-Example:
-  python enso_event_depth_jackknife.py
+Example
+-------
+python enso_jackknife.py
 
-Outputs:
-  stats/event_depth_all_events.csv
-  stats/event_depth_jackknife_summary.csv
-  stats/event_depth_jackknife_wide.csv
-
-Purpose:
-  Tests whether the 55 m event-based depth selection is stable when
-  individual El Nino events are removed one at a time.
+Outputs
+-------
+- stats/event_depth_all_events.csv
+- stats/event_depth_jackknife_summary.csv
+- stats/event_depth_jackknife_wide.csv
 """
+
 
 import os
 import numpy as np
@@ -136,6 +135,7 @@ def run_event_depth_jackknife(
     min_mean_lead=0.0,
     out_prefix="stats/event_depth_jackknife",
 ):
+    """Run full-sample and leave-one-event-out depth-selection tests."""
     os.makedirs("stats", exist_ok=True)
 
     df = compute_event_matches(

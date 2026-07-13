@@ -1,8 +1,23 @@
 """
-This code generates Figures 1 through 6 of the "Machine learning 
-exploration of ENSO prediction skill from upper-ocean subsurface temperature
-temperature over the Western Tropical Pacific" Paper. Using GODAS Data
+Generate the main ENSO analysis figures and regression diagnostics.
+
+This module supports the manuscript on western tropical Pacific subsurface
+temperature anomalies as ENSO precursors. It loads GODAS monthly potential
+temperature files from ``data/``, builds anomaly fields and box-mean time
+series, evaluates ordinary least-squares forecast experiments, and saves
+figures and summary statistics to ``figures/`` and ``stats/``.
+
+Expected inputs
+---------------
+- data/godasClimatologyData_<depth>m.nc
+- data/movingAverageAnomalies<depth>m.txt
+
+Typical use
+-----------
+Run selected blocks from the ``__main__`` section after placing the required
+input files in ``data/``.
 """
+
 
 import os
 import time
@@ -25,7 +40,7 @@ from sklearn.metrics import mean_squared_error
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 
-# Global style 
+# Global style
 mpl.rcParams.update({
     "font.family": "Arial",
     "font.weight": "bold",
@@ -50,6 +65,7 @@ DEG = "\N{DEGREE SIGN}"
 
 
 def lon_label(x, _):
+    """Return a longitude label using east/west notation."""
     if np.isnan(x):
         return ""
     x = float(x)
@@ -60,6 +76,7 @@ def lon_label(x, _):
 
 
 def lat_label(y, _):
+    """Return a latitude label using north/south notation."""
     if np.isnan(y):
         return ""
     y = int(round(y))
@@ -70,12 +87,14 @@ def lat_label(y, _):
     return f"0{DEG}"
 
 def lon_formatter(x, pos=None):
+    """Format longitude ticks for matplotlib axes."""
     if x <= 180:
         return f"{int(x)}°E"
     else:
         return f"{int(360 - x)}°W"
 
 def lat_formatter(y, pos=None):
+    """Format latitude ticks for matplotlib axes."""
     if y > 0:
         return f"{int(y)}°N"
     elif y < 0:
@@ -83,10 +102,12 @@ def lat_formatter(y, pos=None):
     else:
         return "0°"
 def sel_time_nearest(da, t):
+    """Select the nearest available time from an xarray object."""
     return da.sel(time=np.datetime64(pd.Timestamp(t)), method="nearest")
 
 
 def to_anomaly(da, clim_start="1980-01-01", clim_end="2023-12-31"):
+    """Convert monthly fields to anomalies relative to a climatological baseline."""
     base = da.sel(time=slice(clim_start, clim_end))
     clim = base.groupby("time.month").mean("time")
     anom = da.groupby("time.month") - clim
@@ -95,6 +116,7 @@ def to_anomaly(da, clim_start="1980-01-01", clim_end="2023-12-31"):
 
 
 def _ensure_output_dirs():
+    """Create output directories used by the analysis scripts."""
     for path in ("stats", "figures"):
         os.makedirs(path, exist_ok=True)
 
@@ -113,6 +135,7 @@ def _plot_monthly_maps_2x3(
     rect_text_color="white",
     rect_text_path_effects=None,
 ):
+    """Plot a two-column, three-row set of monthly anomaly maps."""
     import cartopy.crs as ccrs
     import cartopy.feature as cfeature
     import matplotlib.ticker as mticker
@@ -229,9 +252,9 @@ def _plot_monthly_maps_2x3(
                 f"({chr(97 + i)}) {titles[i]}",
                 fontsize=13,
                 fontweight="bold",
-                pad=6  
+                pad=6
             )
-            
+
             rect = patches.Rectangle(
                 (rect_lon_range[0], rect_lat_range[0]),
                 rect_lon_range[1] - rect_lon_range[0],
@@ -264,6 +287,7 @@ def _plot_monthly_maps_2x3(
 
 
 def generate_figure2_like_paper():
+    """Generate the western/eastern Pacific event-map figure."""
     months = [
         "1998-01-16",
         "1998-02-16",
@@ -299,6 +323,7 @@ def generate_figure2_like_paper():
 
 def generate_figure3_like_paper():
 
+    """Generate the selected-depth precursor time-series figure."""
     months = [
         "1998-01-16",
         "1998-02-16",
@@ -332,6 +357,7 @@ def generate_figure3_like_paper():
     )
 
 def generate_deep_to_surface_event_maps():
+    """Generate maps comparing subsurface and surface event anomalies."""
     import os
     import numpy as np
     import xarray as xr
@@ -467,7 +493,7 @@ def generate_deep_to_surface_event_maps():
                     west_lon_range[1] - west_lon_range[0],
                     west_lat_range[1] - west_lat_range[0],
                     linewidth=2.5,
-                    edgecolor="navy",
+                    edgecolor="purple",
                     facecolor="none",
                     transform=data_crs,
                     zorder=7,
@@ -513,7 +539,7 @@ def generate_deep_to_surface_event_maps():
                     east_lon_range[1] - east_lon_range[0],
                     east_lat_range[1] - east_lat_range[0],
                     linewidth=2.5,
-                    edgecolor="red",
+                    edgecolor="white",
                     facecolor="none",
                     transform=data_crs,
                     zorder=7,
@@ -596,8 +622,11 @@ def generate_deep_to_surface_event_maps():
         west_ds.close()
         east_ds.close()
 
+
 class EnsoModel:
+    """Base class for loading GODAS data and assembling ENSO predictor/target arrays."""
     def __init__(self):
+        """Initialize dataset dates, train/validation windows, and output directories."""
         self.dataset_begin = "1980-01-01"
         self.dataset_end = "2023-12-31"
         self.start_stop_list_train = ["1980-01-01", "1995-12-31"]
@@ -607,6 +636,7 @@ class EnsoModel:
 
     @staticmethod
     def obtain_dir(predictor_depth=5, predictand_depth=5):
+        """Return the predictor NetCDF path and predictand text-file path."""
         return [
             os.path.join("data", f"godasClimatologyData_{predictor_depth}m.nc"),
             os.path.join("data", f"movingAverageAnomalies{predictand_depth}m.txt"),
@@ -614,12 +644,14 @@ class EnsoModel:
 
     @staticmethod
     def corr_rmse_fcn(y_true, predictions):
+        """Return Pearson correlation and RMSE for a prediction vector."""
         mse = mean_squared_error(y_true, predictions)
         rmse = np.sqrt(mse)
         return scipy.stats.pearsonr(y_true, predictions)[0], rmse
 
 
     def _load_target_txt_series(self, predictand_depth):
+        """Load a monthly target anomaly series from the manuscript text-format input."""
         anomaly_path = self.obtain_dir(predictand_depth=predictand_depth)[1]
         vals = []
 
@@ -637,6 +669,7 @@ class EnsoModel:
 
 
     def _load_predictor_anomaly_array(self, predictor_depth):
+        """Load a predictor depth field and convert it to monthly anomalies."""
         godas_path = self.obtain_dir(predictor_depth=predictor_depth)[0]
 
         with xr.open_dataset(godas_path) as ds:
@@ -656,6 +689,7 @@ class EnsoModel:
 
 
     def _load_predictor_matrix(self, predictor_depth, start_date, end_date):
+        """Load a predictor depth field and reshape it into a two-dimensional matrix."""
         anom = self._load_predictor_anomaly_array(predictor_depth)
 
         anom_sel = anom.sel(time=slice(start_date, end_date))
@@ -665,6 +699,7 @@ class EnsoModel:
 
 
     def _build_nan_mask(self, predictor_depth):
+        """Build a mask of grid cells that remain finite through the full anomaly record."""
         anom = self._load_predictor_anomaly_array(predictor_depth)
 
         arr = anom.values.reshape(anom.shape[0], -1)
@@ -674,6 +709,7 @@ class EnsoModel:
 
 
     def data_assembly(self, date_list, predictor_depth, predictand_depth, nan_mask, lead_time):
+        """Assemble full-field predictor and target arrays for a specified lead time."""
         start_date, end_date = date_list
         y_all = self._load_target_txt_series(predictand_depth)
 
@@ -691,6 +727,7 @@ class EnsoModel:
         return X[:n], y.iloc[:n]
 
     def build_boxmean_series(self, depth, lat_range, lon_range):
+        """Build a latitude-weighted box-mean anomaly time series."""
         path = os.path.join("data", f"godasClimatologyData_{int(depth)}m.nc")
         ds = xr.open_dataset(path)
         try:
@@ -713,9 +750,11 @@ class EnsoModel:
             ds.close()
 
     def load_target_series(self, predictand_depth):
+        """Load the target anomaly series for a selected depth."""
         return self._load_target_txt_series(predictand_depth)
 
     def assemble_boxmean_xy(self, predictor_series, target_series, date_list, lead_time):
+        """Align a box-mean predictor with a target series at a specified lead time."""
         start_date, end_date = pd.to_datetime(date_list[0]), pd.to_datetime(date_list[1])
 
         y = target_series.loc[
@@ -730,7 +769,8 @@ class EnsoModel:
         y = y.iloc[:n]
         return x.values.reshape(-1, 1), y
 
-    def generate_figure1_plotly_volume_like(self):
+    def generate_plotly(self):
+        """Generate the three-dimensional Plotly anomaly-structure figure."""
         depth_vec = [5, 35, 55, 85, 115]
         n = len(depth_vec)
 
@@ -1111,7 +1151,7 @@ class EnsoModel:
                         linecolor="rgba(60,60,60,1)",
                         linewidth=3,
                     ),
-                    
+
                 ),
             )
 
@@ -1119,6 +1159,7 @@ class EnsoModel:
 
 
 class EnsoLinearModel(EnsoModel):
+    """Linear-regression workflow for ENSO prediction experiments and diagnostics."""
     @staticmethod
     def make_regression_features(X, feature_mode="linear"):
         """
@@ -1197,7 +1238,7 @@ class EnsoLinearModel(EnsoModel):
             "pred_std": pred_std,
             "amp_ratio": amp_ratio,
         }
-    
+
 
     def run_all_scenarios(
         self,
@@ -1205,6 +1246,7 @@ class EnsoLinearModel(EnsoModel):
         use_deep_target=False,
         feature_mode="linear",
     ):
+        """Run full-field predictor experiments against the smoothed target series."""
         month_vec = np.arange(1, 19)
         depth_vec = np.arange(5, 215, 10)
         corr_mat = np.zeros((len(month_vec), len(depth_vec)))
@@ -1258,7 +1300,7 @@ class EnsoLinearModel(EnsoModel):
                 rmse_mat[nn, mm] = rmse
 
         return corr_mat, rmse_mat, month_vec, depth_vec
-    
+
 
     def run_all_scenarios_box_target(
         self,
@@ -1340,7 +1382,7 @@ class EnsoLinearModel(EnsoModel):
                 rmse_mat[nn, mm] = rmse
 
         return corr_mat, rmse_mat, month_vec, depth_vec
-    
+
 
     def compare_boxmean_polynomial_models(
         self,
@@ -1536,7 +1578,7 @@ class EnsoLinearModel(EnsoModel):
             print(f"Saved comparison to: {comparison_path}")
 
         return metrics_df, comparison_df
-    
+
 
     def generate_boxmean_prediction_figure(
         self,
@@ -1555,6 +1597,7 @@ class EnsoLinearModel(EnsoModel):
         y_limits=None,
         feature_mode="quadratic",        # "linear" or "quadratic"
     ):
+        """Plot observed and regression-predicted box-mean ENSO time series."""
         import matplotlib.ticker as mticker
         import matplotlib.dates as mdates
         import sklearn.linear_model
@@ -1850,6 +1893,7 @@ class EnsoLinearModel(EnsoModel):
 # Heatmaps for Figures 7 & 8
 
 def corr_paper_cmap():
+    """Return the custom correlation colormap used in manuscript heatmaps."""
     return LinearSegmentedColormap.from_list(
         "corr_paper",
         [
@@ -1869,6 +1913,7 @@ def plot_correlation_heatmap(
     fig_path,
     title="Full-field prediction skill: correlation",
 ):
+    """Plot a depth-by-lead correlation heatmap."""
     fig, ax = plt.subplots(figsize=(8.5, 7))
 
     # corr_mat is shape: (lead, depth)
@@ -1914,8 +1959,11 @@ def plot_correlation_heatmap(
         spacing="uniform",
         drawedges=True,
     )
-    cbar.set_label("Correlation", fontsize=16)
-    cbar.ax.tick_params(labelsize=16)
+    cbar.set_label("Correlation", fontsize=16, fontweight="bold")
+    cbar.ax.tick_params(labelsize=16, width=1.2, length=6)
+
+    for label in cbar.ax.get_yticklabels():
+        label.set_fontweight("bold")
 
     ax.grid(False)
     plt.tight_layout()
@@ -1931,6 +1979,7 @@ def plot_rmse_heatmap(
     title="Full-field prediction skill: RMSE",
     title_size=16,
 ):
+    """Plot a depth-by-lead RMSE heatmap."""
     fig, ax = plt.subplots(figsize=(8.5, 7))
 
     # rmse_mat is shape: (lead, depth)
@@ -1954,14 +2003,14 @@ def plot_rmse_heatmap(
     )
 
     ax.set_xticks(np.arange(len(month_vec)))
-    ax.set_xticklabels(month_vec, fontsize=12)
+    ax.set_xticklabels(month_vec, fontsize=15, fontweight="bold")
 
     ax.set_yticks(np.arange(len(depth_vec)))
-    ax.set_yticklabels(depth_vec, fontsize=12)
+    ax.set_yticklabels(depth_vec, fontsize=15, fontweight="bold")
 
-    ax.set_xlabel("Forecast Lead Time (months)")
-    ax.set_ylabel("Depth (m)")
-    ax.set_title(title, fontsize=title_size, pad=10, fontweight="bold")
+    ax.set_xlabel("Forecast Lead Time (months)", fontsize=18, fontweight="bold")
+    ax.set_ylabel("Depth (m)", fontsize=18, fontweight="bold")
+    ax.set_title(title, fontsize=16, pad=10, fontweight="bold")
 
     cbar = plt.colorbar(
         im,
@@ -1973,19 +2022,22 @@ def plot_rmse_heatmap(
         spacing="uniform",
         drawedges=True,
     )
-    cbar.set_label("RMSE", fontsize=16)
-    cbar.ax.set_title("°C", fontsize=12, pad=6)
-    cbar.ax.tick_params(labelsize=12)
+    cbar.set_label("RMSE", fontsize=16, fontweight="bold")
+    cbar.ax.set_title("°C", fontsize=16, fontweight="bold", pad=6)
+    cbar.ax.tick_params(labelsize=16, width=1.2, length=6)
+
+    for label in cbar.ax.get_yticklabels():
+        label.set_fontweight("bold")
 
     ax.grid(False)
     plt.tight_layout()
     plt.savefig(fig_path, dpi=400, bbox_inches="tight")
     plt.show()
 
+
 def save_polynomial_comparison_csv(metrics_df, out_path):
     """
     Save a clean side-by-side CSV comparing linear, quadratic, and cubic models.
-
     Each row is one lead time.
     """
     import os
@@ -2053,33 +2105,31 @@ def save_polynomial_comparison_csv(metrics_df, out_path):
     return wide_df
 
 
-
 if __name__ == "__main__":
     start = time.time()
     _ensure_output_dirs()
+
     # Standalone retained figures
-    # generate_figure2_like_paper()
-    # generate_figure3_like_paper()
     generate_deep_to_surface_event_maps()
 
     obj = EnsoLinearModel()
 
-    # metrics_4a_poly, comparison_4a_poly = obj.compare_boxmean_polynomial_models(
+    # metrics_smoothed_poly, comparison_smoothed_poly = obj.compare_boxmean_polynomial_models(
     #     predictor_depth=55,
     #     predictand_depth=5,
     #     predictor_lat_range=(0, 10),
     #     predictor_lon_range=(140, 160),
     #     target_mode="benchmark",
     #     lead_times=(1, 3, 6, 9),
-    #     csv_prefix="fig_4a_linear_quadratic_cubic",
+    #     csv_prefix="smoothed_linear_quadratic_cubic",
     # )
 
     # comparison_table_4a = save_polynomial_comparison_csv(
-    #     metrics_df=metrics_4a_poly,
-    #     out_path=os.path.join("stats", "fig_4a_polynomial_side_by_side_comparison.csv"),
+    #     metrics_df=metrics_smoothed_poly,
+    #     out_path=os.path.join("stats", "smoothed_polynomial_side_by_side_comparison.csv"),
     # )
 
-    # metrics_4b_poly, comparison_4b_poly = obj.compare_boxmean_polynomial_models(
+    # metrics_raw_poly, comparison_raw_poly = obj.compare_boxmean_polynomial_models(
     #     predictor_depth=55,
     #     predictand_depth=5,
     #     predictor_lat_range=(0, 10),
@@ -2088,18 +2138,19 @@ if __name__ == "__main__":
     #     target_lat_range=(-5, 5),
     #     target_lon_range=(190, 240),
     #     lead_times=(1, 3, 6, 9),
-    #     csv_prefix="fig_4b_linear_quadratic_cubic",
+    #     csv_prefix="raw_linear_quadratic_cubic",
     # )
 
     # comparison_table_4b = save_polynomial_comparison_csv(
-    #     metrics_df=metrics_4b_poly,
-    #     out_path=os.path.join("stats", "fig_4b_polynomial_side_by_side_comparison.csv"),
+    #     metrics_df=metrics_raw_poly,
+    #     out_path=os.path.join("stats", "raw_polynomial_side_by_side_comparison.csv"),
     # )
-    # Figure 1
-    obj.generate_figure1_plotly_volume_like()
 
-    # Boxmean figures kept from your updated workflow
-    #Nino 3.4 region 5N-5S, 170W-120W
+    # Figure 1
+    obj.generate_plotly()
+
+    # Boxmean figures
+    # Nino 3.4 region 5N-5S, 170W-120W
 
     obj.generate_boxmean_prediction_figure(
         predictor_depth=55,
@@ -2107,10 +2158,10 @@ if __name__ == "__main__":
         predictor_lat_range=(0, 10),
         predictor_lon_range=(140, 160),
         target_mode="benchmark",
-        figure_title="Observed and predicted Niño 3.4 anomalies using the 55 m western Pacific box-mean predictor",
-        panel_title_prefix="Benchmark Niño 3.4 anomalies",
-        ylabel="Niño 3.4 Anomaly",
-        out_name="fig_4a_linear.png",
+        figure_title="Observed and Regression-Predicted Smoothed Niño 3.4 Anomalies",
+        panel_title_prefix="Smoothed Niño 3.4 anomaly",
+        ylabel="Smoothed Niño 3.4 anomaly",
+        out_name="fig_6.png",
         y_limits=(-3, 3.5),
         feature_mode="linear",
     )
@@ -2123,90 +2174,90 @@ if __name__ == "__main__":
         target_mode="boxmean",
         target_lat_range=(-5, 5),
         target_lon_range=(190, 240),
-        figure_title="Observed and predicted Niño 3.4 anomalies using the 55 m western Pacific box-mean predictor",
-        panel_title_prefix="GODAS Niño 3.4 surface-box anomalies",
-        ylabel="Surface Box Anomaly",
-        out_name="fig_4b_linear.png",
+        figure_title="Observed and Regression-Predicted GODAS Niño 3.4 Anomalies",
+        panel_title_prefix="GODAS Niño 3.4 anomaly",
+        ylabel="GODAS Niño 3.4 anomaly",
+        out_name="fig_7.png",
         y_limits=(-3, 3.5),
         feature_mode="linear",
     )
 
 
-    # Figure 5
+    # Figure 4
     try:
-        corr7 = np.load(os.path.join("stats", "corr_fig5.npy"))
-        rmse7 = np.load(os.path.join("stats", "rmse_fig5.npy"))
-        months7 = np.load(os.path.join("stats", "months_fig5.npy"))
-        depths7 = np.load(os.path.join("stats", "depths_fig5.npy"))
+        corr4 = np.load(os.path.join("stats", "corr_fig4.npy"))
+        rmse4 = np.load(os.path.join("stats", "rmse_fig4.npy"))
+        months4 = np.load(os.path.join("stats", "months_fig4.npy"))
+        depths4 = np.load(os.path.join("stats", "depths_fig4.npy"))
     except Exception:
-        corr7, rmse7, months7, depths7 = obj.run_all_scenarios(
+        corr4, rmse4, months4, depths4 = obj.run_all_scenarios(
             predictand_depth=5,
             use_deep_target=False
         )
-        np.save(os.path.join("stats", "corr_fig5.npy"), corr7)
-        np.save(os.path.join("stats", "rmse_fig5.npy"), rmse7)
-        np.save(os.path.join("stats", "months_fig5.npy"), months7)
-        np.save(os.path.join("stats", "depths_fig5.npy"), depths7)
-        print("Computed and saved data for Figure 5.")
+        np.save(os.path.join("stats", "corr_fig4.npy"), corr4)
+        np.save(os.path.join("stats", "rmse_fig4.npy"), rmse4)
+        np.save(os.path.join("stats", "months_fig4.npy"), months4)
+        np.save(os.path.join("stats", "depths_fig4.npy"), depths4)
+        print("Computed and saved data for Figure 4.")
 
     plot_correlation_heatmap(
-        corr7,
-        months7,
-        depths7,
-        "figures/fig_5a.png",
-        title="Full-field correlation for benchmark Niño 3.4 target",
+        corr4,
+        months4,
+        depths4,
+        "figures/fig_4a.png",
+        title="Correlation: smoothed Niño 3.4 target",
     )
 
     plot_rmse_heatmap(
-        rmse7,
-        months7,
-        depths7,
-        "figures/fig_5b.png",
-        title="Full-field RMSE for benchmark Niño 3.4 target",
+        rmse4,
+        months4,
+        depths4,
+        "figures/fig_4b.png",
+        title="RMSE: smoothed Niño 3.4 target",
     )
 
-    #Figure 6: full-field predictor depths -> Niño 3.4 surface-box target
+    # Figure 5: full-field predictor depths -> Niño 3.4 surface-box target
     required_depths = np.arange(5, 215, 10)
 
     try:
-        corr8 = np.load(os.path.join("stats", "corr_fig6.npy"))
-        rmse8 = np.load(os.path.join("stats", "rmse_fig6.npy"))
-        months8 = np.load(os.path.join("stats", "months_fig6.npy"))
-        depths8 = np.load(os.path.join("stats", "depths_fig6.npy"))
+        corr5 = np.load(os.path.join("stats", "corr_fig5.npy"))
+        rmse5 = np.load(os.path.join("stats", "rmse_fig5.npy"))
+        months5 = np.load(os.path.join("stats", "months_fig5.npy"))
+        depths5 = np.load(os.path.join("stats", "depths_fig5.npy"))
 
-        if not np.array_equal(depths8, required_depths):
-            raise ValueError("Cached Figure 6 depths are stale.")
+        if not np.array_equal(depths5, required_depths):
+            raise ValueError("Cached Figure 5 depths are stale.")
 
-        print("Loaded cached data for Figure 6.")
+        print("Loaded cached data for Figure 5.")
 
     except Exception:
-        corr8, rmse8, months8, depths8 = obj.run_all_scenarios_box_target(
+        corr5, rmse5, months5, depths5 = obj.run_all_scenarios_box_target(
             target_depth=5,
             target_lat_range=(-5, 5),
             target_lon_range=(190, 240),
         )
 
-        np.save(os.path.join("stats", "corr_fig6.npy"), corr8)
-        np.save(os.path.join("stats", "rmse_fig6.npy"), rmse8)
-        np.save(os.path.join("stats", "months_fig6.npy"), months8)
-        np.save(os.path.join("stats", "depths_fig6.npy"), depths8)
+        np.save(os.path.join("stats", "corr_fig5.npy"), corr5)
+        np.save(os.path.join("stats", "rmse_fig5.npy"), rmse5)
+        np.save(os.path.join("stats", "months_fig5.npy"), months5)
+        np.save(os.path.join("stats", "depths_fig5.npy"), depths5)
 
-        print("Computed and saved data for Figure 6.")
+        print("Computed and saved data for Figure 5.")
 
     plot_correlation_heatmap(
-        corr8,
-        months8,
-        depths8,
-        os.path.join("figures", "fig_6a.png"),
-        title="Full-field correlation for GODAS Niño 3.4 surface-box target",
+        corr5,
+        months5,
+        depths5,
+        os.path.join("figures", "fig_5a.png"),
+        title="Correlation: GODAS Niño 3.4 target",
     )
 
     plot_rmse_heatmap(
-        rmse8,
-        months8,
-        depths8,
-        os.path.join("figures", "fig_6b.png"),
-        title="Full-field RMSE for GODAS Niño 3.4 surface-box target",
+        rmse5,
+        months5,
+        depths5,
+        os.path.join("figures", "fig_5b.png"),
+        title="RMSE: GODAS Niño 3.4 target",
     )
 
 
