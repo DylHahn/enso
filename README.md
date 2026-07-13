@@ -89,7 +89,7 @@ The ocean temperature data used in this project come from the NCEP Global Ocean 
 
 Raw GODAS NetCDF files are excluded from this GitHub repository. Processed GODAS-derived files and any large statistical outputs needed to reproduce the manuscript will be archived with the Zenodo release.
 
-Zenodo DOI: TBA
+Zenodo DOI: 10.5281/zenodo.21251003
 
 ## Citation
 
