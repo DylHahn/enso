@@ -1,6 +1,6 @@
 # Western Tropical Pacific Subsurface Predictors of ENSO
 
-This repository contains the analysis code and reproducibility materials for the paper **“Subsurface Western Pacific Temperature Precursors of Eastern Pacific ENSO Surface Variability.”**
+This repository contains the analysis code and reproducibility materials for the paper **“An Analysis of the Subsurface Western Tropical Pacific Temperature Time Series as a Predictor for the Surface ENSO Signals over Eastern Pacific.”**
 
 The project tests whether subsurface temperature anomalies in the western tropical Pacific provide precursor information for future eastern Pacific ENSO surface conditions. The analysis uses monthly NCEP Global Ocean Data Assimilation System (GODAS) potential temperature data, computes temperature anomalies at multiple depth levels, applies ordinary least squares regression at lead times from 1 to 18 months, and includes an event-based analysis of western Pacific subsurface cooling before major El Niño events.
 
